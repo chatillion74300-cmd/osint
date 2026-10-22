@@ -1,5 +1,1 @@
-transformers>=4.50.0
-accelerate
-torch
-pillow
-spaces
+google-cloud-aiplatform

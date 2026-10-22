@@ -1,30 +1,48 @@
-"""Gradio demo for google/gemma-3-12b-it (text + image chat) on Hugging Face ZeroGPU."""
+"""Gradio demo for google/gemma-3-12b-it (text + image chat), served from a Vertex AI endpoint."""
 
+import base64
+import json
+import mimetypes
 import os
-from threading import Thread
 
 import gradio as gr
-import spaces
-import torch
-from transformers import AutoModelForImageTextToText, AutoProcessor, TextIteratorStreamer
+from google.cloud import aiplatform
+from google.oauth2 import service_account
 
-MODEL_ID = os.getenv("MODEL_ID", "google/gemma-3-12b-it")
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
 MAX_IMAGES = 5
 
-processor = AutoProcessor.from_pretrained(MODEL_ID)
-model = AutoModelForImageTextToText.from_pretrained(
-    MODEL_ID, device_map="auto", dtype=torch.bfloat16
-)
-model.eval()
+PROJECT = os.environ["GCP_PROJECT"]
+REGION = os.getenv("GCP_REGION", "us-central1")
+ENDPOINT_ID = os.environ["VERTEX_ENDPOINT_ID"]
+# Model Garden deployments default to a dedicated endpoint; set to "false" for a shared one.
+DEDICATED_ENDPOINT = os.getenv("VERTEX_DEDICATED_ENDPOINT", "true").lower() == "true"
+
+# Service-account key JSON stored as a Space secret; falls back to Application Default Credentials.
+credentials = None
+if os.getenv("GCP_SA_KEY"):
+    credentials = service_account.Credentials.from_service_account_info(
+        json.loads(os.environ["GCP_SA_KEY"]),
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+
+aiplatform.init(project=PROJECT, location=REGION, credentials=credentials)
+endpoint = aiplatform.Endpoint(ENDPOINT_ID)
 
 
 def _is_image(path: str) -> bool:
     return path.lower().endswith(IMAGE_EXTENSIONS)
 
 
+def _image_part(path: str) -> dict:
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+
+
 def _to_parts(content) -> list[dict]:
-    """Convert any Gradio chat content shape into Gemma chat-template parts."""
+    """Convert any Gradio chat content shape into OpenAI-style chat parts."""
     if content is None:
         return []
     if isinstance(content, str):
@@ -37,13 +55,9 @@ def _to_parts(content) -> list[dict]:
         if content.get("type") == "file":
             return _to_parts(content.get("file"))
         path = content.get("path")
-        if path and _is_image(path):
-            return [{"type": "image", "url": path}]
-        return []
+        return [_image_part(path)] if path and _is_image(path) else []
     path = getattr(content, "path", None)  # gr.FileData
-    if path and _is_image(path):
-        return [{"type": "image", "url": path}]
-    return []
+    return [_image_part(path)] if path and _is_image(path) else []
 
 
 def build_messages(message: dict, history: list[dict], system_prompt: str) -> list[dict]:
@@ -70,40 +84,37 @@ def build_messages(message: dict, history: list[dict], system_prompt: str) -> li
     return messages
 
 
-@spaces.GPU(duration=120)
+def _extract_text(predictions) -> str:
+    """Read the reply from a vLLM chat-completions prediction (dict, or list of dicts/strings)."""
+    if isinstance(predictions, list):
+        predictions = predictions[0] if predictions else ""
+    if isinstance(predictions, dict) and "choices" in predictions:
+        return predictions["choices"][0]["message"]["content"]
+    if isinstance(predictions, str):
+        return predictions.split("Output:", 1)[-1].strip()
+    raise gr.Error(f"Unexpected response from the endpoint: {str(predictions)[:300]}")
+
+
 def generate(message: dict, history: list[dict], system_prompt: str, max_new_tokens: int, temperature: float):
     messages = build_messages(message, history, system_prompt)
 
-    n_images = sum(p["type"] == "image" for m in messages for p in m["content"])
+    n_images = sum(p["type"] == "image_url" for m in messages for p in m["content"])
     if n_images > MAX_IMAGES:
         raise gr.Error(f"Too many images in the conversation ({n_images}); the limit is {MAX_IMAGES}.")
 
-    inputs = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(model.device, dtype=torch.bfloat16)
-
-    streamer = TextIteratorStreamer(processor, skip_prompt=True, skip_special_tokens=True, timeout=60.0)
-    generate_kwargs = dict(
-        **inputs,
-        streamer=streamer,
-        max_new_tokens=max_new_tokens,
-        do_sample=temperature > 0,
-    )
-    if temperature > 0:
-        generate_kwargs.update(temperature=temperature, top_p=0.95, top_k=64)
-
-    thread = Thread(target=model.generate, kwargs=generate_kwargs)
-    thread.start()
-
-    output = ""
-    for chunk in streamer:
-        output += chunk
-        yield output
-    thread.join()
+    instance = {
+        "@requestFormat": "chatCompletions",
+        "messages": messages,
+        "max_tokens": max_new_tokens,
+        "temperature": temperature,
+    }
+    try:
+        response = endpoint.predict(
+            instances=[instance], use_dedicated_endpoint=DEDICATED_ENDPOINT, timeout=300
+        )
+    except Exception as e:
+        raise gr.Error(f"Vertex AI request failed: {e}") from e
+    return _extract_text(response.predictions)
 
 
 demo = gr.ChatInterface(
@@ -126,9 +137,8 @@ demo = gr.ChatInterface(
     title="Gemma 3 12B IT",
     description=(
         "Chat with [google/gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it), "
-        "Google's 12B instruction-tuned multimodal model. Attach images to ask about them."
+        "served from a Vertex AI endpoint. Attach images to ask about them."
     ),
-    stop_btn=True,
     fill_height=True,
 )
 

@@ -10,28 +10,42 @@ pinned: false
 license: gemma
 models:
   - google/gemma-3-12b-it
-short_description: Multimodal chat demo for google/gemma-3-12b-it
+short_description: Multimodal chat demo for Gemma 3 12B on Vertex AI
 ---
 
-# Gemma 3 12B IT: chat demo
+# Gemma 3 12B IT: chat demo (Vertex AI backend)
 
 A Gradio chat demo for [google/gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it).
-It takes text and images, streams its answers, and runs on ZeroGPU.
+It takes text and images. The Space runs on free CPU hardware; the model itself runs on a
+Vertex AI endpoint in your Google Cloud project.
 
-## Deploy
+## 1. Deploy Gemma 3 12B on Vertex AI
 
-1. Create a new Space (SDK: **Gradio**, hardware: **ZeroGPU**) and push these files to it.
-2. Gemma is a **gated model**. Accept the licence on the model page with your HF account.
-3. In the Space settings, add a secret named `HF_TOKEN` holding a read token from that account.
+In the Google Cloud console: **Vertex AI → Model Garden → Gemma 3 → Deploy**, pick the
+`gemma-3-12b-it` variant with the vLLM serving container, and note the **endpoint ID** and **region**.
 
-`MODEL_ID` can be overridden with a Space variable, for example `google/gemma-3-4b-it` for a smaller model.
+> The endpoint bills for as long as it is deployed, even with no traffic. Undeploy it when you are done.
+
+## 2. Create a service account
+
+Give it the **Vertex AI User** role (`roles/aiplatform.user`) and create a JSON key.
+
+## 3. Configure the Space
+
+| Name | Kind | Value |
+|---|---|---|
+| `GCP_SA_KEY` | Secret | Full contents of the service-account JSON key |
+| `GCP_PROJECT` | Variable | Your Google Cloud project ID |
+| `GCP_REGION` | Variable | Endpoint region (default `us-central1`) |
+| `VERTEX_ENDPOINT_ID` | Variable | Numeric endpoint ID |
+| `VERTEX_DEDICATED_ENDPOINT` | Variable | `true` (Model Garden default) or `false` for a shared endpoint |
+
+Hardware: **CPU basic** is enough.
 
 ## Run locally
 
-Needs a GPU with about 24 GB of VRAM (bf16).
-
 ```bash
 pip install gradio -r requirements.txt
-huggingface-cli login
-python app.py
+gcloud auth application-default login   # or export GCP_SA_KEY
+GCP_PROJECT=... VERTEX_ENDPOINT_ID=... python app.py
 ```
