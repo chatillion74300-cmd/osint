@@ -1,0 +1,248 @@
+<title>Carré de Jupiter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: cyanotype drafting sheet, square + trace side by side, reference panels below */
+:root {
+  --paper: #eaf1f7;
+  --sheet: #f6f9fc;
+  --ink: #0f3557;
+  --ink-soft: #4d6b86;
+  --rule: #b9cbdc;
+  --tin: #9a6412;
+  --tin-wash: #f3e3c4;
+  --display: "Spectral SC", "Iowan Old Style", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0a2540; --sheet: #0e2f50; --ink: #e3edf6; --ink-soft: #9db7cf;
+  --rule: #2a4d70; --tin: #f0c46a; --tin-wash: #3a3423; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0a2540; --sheet: #0e2f50; --ink: #e3edf6; --ink-soft: #9db7cf;
+  --rule: #2a4d70; --tin: #f0c46a; --tin-wash: #3a3423; color-scheme: dark }
+
+body {
+  background: var(--paper);
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+  color: var(--ink);
+  font: 16px/1.55 var(--body);
+}
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px;
+}
+header { display: grid; gap: 4px; }
+h1 { font: 700 clamp(1.9rem, 5vw, 2.8rem)/1.1 var(--display); margin: 0; text-wrap: balance; letter-spacing: .02em; }
+.source { color: var(--ink-soft); margin: 0; }
+.sheet { background: var(--sheet); border: 1.5px solid var(--ink); padding: 20px; min-width: 0; display: grid; gap: 14px; align-content: start; }
+.sheet h2 { font: 600 .8rem/1 var(--mono); text-transform: uppercase; letter-spacing: .12em; margin: 0; color: var(--ink-soft); }
+.grid2 { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+.grid3 { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+
+.square { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 0; width: min(100%, 380px); font-variant-numeric: tabular-nums; }
+.cell { aspect-ratio: 1; display: grid; place-items: center; border: 1.5px solid var(--ink); margin: -0.75px; font: 700 clamp(1.3rem, 5vw, 2rem)/1 var(--mono); transition: background .15s; }
+.cell.on { background: var(--tin-wash); color: var(--tin); }
+.sum { font: 400 .95rem var(--mono); color: var(--ink-soft); display: grid; place-items: center; padding: 0 10px; }
+.sum.on { color: var(--tin); font-weight: 700; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: 600 .85rem var(--mono); color: var(--ink); background: transparent; border: 1.5px solid var(--ink); padding: 6px 10px; cursor: pointer; }
+button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+button:focus-visible { outline: 3px solid var(--tin); outline-offset: 2px; }
+.readout { font: 400 .95rem var(--mono); min-height: 1.5em; margin: 0; }
+.readout b { color: var(--tin); }
+
+.trace { width: min(100%, 380px); height: auto; display: block; }
+.trace text { font-family: var(--mono); }
+.letters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.letters li { border: 1px solid var(--rule); padding: 4px 8px; display: grid; justify-items: center; font: .8rem var(--mono); min-width: 52px; }
+.letters .heb { font: 1.25rem var(--body); }
+.letters .red { color: var(--tin); font-weight: 700; }
+
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+dt { color: var(--ink-soft); font: .8rem/1.9 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+dd { margin: 0; }
+.status { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.status li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
+.pill { font: 700 .7rem var(--mono); text-transform: uppercase; letter-spacing: .08em; padding: 2px 8px; border: 1.5px solid currentColor; white-space: nowrap; }
+.ok { color: var(--ink); } .rec { color: var(--tin); } .no { color: var(--ink-soft); }
+.note { color: var(--ink-soft); font-size: .9rem; margin: 0; max-width: 65ch; }
+@media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Carré de Jupiter</h1>
+    <p class="source">Ordre 4 · d’après H. C. Agrippa, <i>De occulta philosophia</i>, livre II, chap. 22 (Cologne, 1533)</p>
+  </header>
+
+  <div class="grid2">
+    <section class="sheet" aria-labelledby="t1">
+      <h2 id="t1">Le carré et ses sommes</h2>
+      <div class="square" id="square" aria-label="Carré magique 4 par 4"></div>
+      <div class="controls" id="lines" aria-label="Choisir une ligne à vérifier"></div>
+      <p class="readout" id="readout" aria-live="polite"></p>
+      <p class="note">Les nombres 1 à 16 apparaissent chacun une fois. Pour un carré d’ordre n, la constante vaut n(n²+1)/2, soit 4 × 17 / 2 = 34. La somme de toutes les cases vaut 136.</p>
+    </section>
+
+    <section class="sheet" aria-labelledby="t2">
+      <h2 id="t2">Tracé d’un nom sur le carré</h2>
+      <div class="controls" id="names"></div>
+      <svg class="trace" id="trace" viewBox="0 0 320 320" role="img" aria-label="Tracé du nom sur la grille"></svg>
+      <ul class="letters" id="letters"></ul>
+      <p class="readout" id="nameReadout"></p>
+      <p class="note">Chaque lettre hébraïque a une valeur. Les valeurs supérieures à 16 sont réduites en retirant les zéros (80 → 8), puis reliées case par case. Ce tracé est reconstruit par cette méthode ; ce n’est pas une copie des sceaux gravés chez Agrippa.</p>
+    </section>
+  </div>
+
+  <div class="grid3">
+    <section class="sheet" aria-labelledby="t3">
+      <h2 id="t3">Correspondances traditionnelles</h2>
+      <dl>
+        <dt>Planète</dt><dd>♃ Jupiter</dd>
+        <dt>Métal</dt><dd>Étain (Sn)</dd>
+        <dt>Jour</dt><dd>Jeudi</dd>
+        <dt>Heure</dt><dd>1ʳᵉ heure après le lever du soleil le jeudi (heures planétaires, ordre chaldéen)</dd>
+        <dt>Domiciles</dt><dd>♐ Sagittaire · ♓ Poissons</dd>
+        <dt>Exaltation</dt><dd>♋ Cancer</dd>
+        <dt>Intelligence</dt><dd>Iophiel, <bdi lang="he">יהפיאל</bdi> = 136</dd>
+        <dt>Esprit</dt><dd>Hismael, <bdi lang="he">הסמאל</bdi> = 136</dd>
+        <dt>Nombres</dt><dd>4 · 16 · 34 · 136</dd>
+      </dl>
+    </section>
+
+    <section class="sheet" aria-labelledby="t4">
+      <h2 id="t4">Plaque d’étain</h2>
+      <svg viewBox="0 0 300 190" role="img" aria-label="Vue éclatée de la plaque d'étain, deux faces gravées" style="width:100%;height:auto">
+        <g fill="var(--sheet)" stroke="var(--ink)" stroke-width="1.6">
+          <path d="M20 60 L110 25 L200 60 L110 95 Z"/>
+          <path d="M20 60 L20 68 L110 103 L200 68 L200 60 L110 95 Z" fill="var(--tin-wash)"/>
+          <path d="M20 130 L110 95 L200 130 L110 165 Z"/>
+          <path d="M20 130 L20 138 L110 173 L200 138 L200 130 L110 165 Z" fill="var(--tin-wash)"/>
+        </g>
+        <g stroke="var(--ink-soft)"><line x1="200" y1="60" x2="222" y2="60"/><line x1="200" y1="130" x2="222" y2="130"/></g>
+        <g fill="var(--ink)" font-family="var(--mono)" font-size="12">
+          <text x="226" y="56">Face A</text><text x="226" y="71" fill="var(--ink-soft)">le carré</text>
+          <text x="226" y="126">Face B</text><text x="226" y="141" fill="var(--ink-soft)">le tracé</text>
+        </g>
+      </svg>
+      <p class="note">Plaque carrée en étain, gravée des deux côtés : le carré sur une face, le nom ou son tracé sur l’autre.</p>
+    </section>
+
+    <section class="sheet" aria-labelledby="t5">
+      <h2 id="t5">Ce qui est établi</h2>
+      <ul class="status">
+        <li><span class="pill ok">Vérifié</span><span>Les sommes du carré et la gématrie des deux noms, recalculées sur cette page.</span></li>
+        <li><span class="pill ok">Source</span><span>Carré, métal, jour et noms d’Iophiel et Hismael tels que donnés par Agrippa.</span></li>
+        <li><span class="pill rec">Reconstruit</span><span>Le tracé des noms, obtenu par la méthode de réduction.</span></li>
+        <li><span class="pill no">Non démontré</span><span>Une efficacité magique du talisman. Cette page est un document symbolique et historique.</span></li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+const SQ = [[4,14,15,1],[9,7,6,12],[5,11,10,8],[16,2,3,13]];
+const N = 4;
+const lines = [];
+for (let r = 0; r < N; r++) lines.push({ label: `Ligne ${r+1}`, cells: SQ[r].map((_, c) => [r, c]) });
+for (let c = 0; c < N; c++) lines.push({ label: `Colonne ${c+1}`, cells: SQ.map((_, r) => [r, c]) });
+lines.push({ label: "Diagonale ↘", cells: SQ.map((_, i) => [i, i]) });
+lines.push({ label: "Diagonale ↙", cells: SQ.map((_, i) => [i, N-1-i]) });
+const sumOf = cells => cells.reduce((s, [r, c]) => s + SQ[r][c], 0);
+
+const sq = document.getElementById("square");
+const cellEls = {}, sumEls = [];
+for (let r = 0; r < N; r++) {
+  for (let c = 0; c < N; c++) {
+    const d = document.createElement("div");
+    d.className = "cell"; d.textContent = SQ[r][c];
+    cellEls[`${r},${c}`] = d; sq.appendChild(d);
+  }
+  const s = document.createElement("div");
+  s.className = "sum"; s.textContent = `= ${sumOf(lines[r].cells)}`;
+  sumEls.push(s); sq.appendChild(s);
+}
+for (let c = 0; c < N; c++) {
+  const s = document.createElement("div");
+  s.className = "sum"; s.style.padding = "8px 0"; s.textContent = sumOf(lines[N + c].cells);
+  sumEls.push(s); sq.appendChild(s);
+}
+const readout = document.getElementById("readout");
+const lineBox = document.getElementById("lines");
+lines.forEach((ln, i) => {
+  const b = document.createElement("button");
+  b.id = `line-${i}`; b.type = "button"; b.textContent = ln.label; b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () => selectLine(i));
+  lineBox.appendChild(b);
+});
+function selectLine(i) {
+  Object.values(cellEls).forEach(e => e.classList.remove("on"));
+  sumEls.forEach(e => e.classList.remove("on"));
+  lineBox.querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-pressed", String(i === j)));
+  const ln = lines[i];
+  ln.cells.forEach(([r, c]) => cellEls[`${r},${c}`].classList.add("on"));
+  if (sumEls[i]) sumEls[i].classList.add("on");
+  const vals = ln.cells.map(([r, c]) => SQ[r][c]);
+  readout.innerHTML = `${ln.label} : ${vals.join(" + ")} = <b>${sumOf(ln.cells)}</b>`;
+}
+selectLine(0);
+
+const NAMES = {
+  Iophiel: [["י","Y",10],["ה","H",5],["פ","P",80],["י","Y",10],["א","A",1],["ל","L",30]],
+  Hismael: [["ה","H",5],["ס","S",60],["מ","M",40],["א","A",1],["ל","L",30]],
+};
+const reduce = v => v <= 16 ? v : Number(String(v).replace(/0+$/, ""));
+const posOf = {};
+SQ.forEach((row, r) => row.forEach((v, c) => posOf[v] = [40 + c * 80, 40 + r * 80]));
+const svg = document.getElementById("trace");
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+svg.appendChild(el("defs", {})).appendChild(el("marker", { id: "ar", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto" }))
+  .appendChild(el("path", { d: "M0 0L10 5L0 10z", fill: "var(--tin)" }));
+const layer = el("g", {});
+SQ.forEach((row, r) => row.forEach((v, c) => {
+  svg.appendChild(el("rect", { x: c * 80, y: r * 80, width: 80, height: 80, fill: "none", stroke: "var(--rule)", "stroke-width": 1.5 }));
+  svg.appendChild(el("text", { x: c * 80 + 8, y: r * 80 + 20, "font-size": 13, fill: "var(--ink-soft)" }, v));
+}));
+svg.appendChild(layer);
+
+const nameBox = document.getElementById("names");
+Object.keys(NAMES).forEach(n => {
+  const b = document.createElement("button");
+  b.id = `name-${n}`; b.type = "button"; b.textContent = n; b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () => selectName(n));
+  nameBox.appendChild(b);
+});
+function selectName(n) {
+  nameBox.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.textContent === n)));
+  const letters = NAMES[n];
+  const path = letters.map(([, , v]) => reduce(v));
+  const pts = path.map(v => posOf[v]);
+  layer.replaceChildren();
+  layer.appendChild(el("path", { d: "M" + pts.map(p => p.join(" ")).join(" L"), fill: "none", stroke: "var(--tin)", "stroke-width": 4, "stroke-linejoin": "round", "marker-end": "url(#ar)" }));
+  layer.appendChild(el("circle", { cx: pts[0][0], cy: pts[0][1], r: 9, fill: "var(--sheet)", stroke: "var(--tin)", "stroke-width": 4 }));
+  const steps = {};
+  path.forEach((v, i) => (steps[v] = steps[v] || []).push(i + 1));
+  Object.entries(steps).forEach(([v, ns]) => {
+    const [x, y] = posOf[v]; const label = ns.join("·"); const w = 12 + 8 * label.length;
+    layer.appendChild(el("rect", { x: x - w / 2, y: y + 14, width: w, height: 20, rx: 10, fill: "var(--sheet)", stroke: "var(--tin)" }));
+    layer.appendChild(el("text", { x, y: y + 28, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "var(--tin)" }, label));
+  });
+  const ul = document.getElementById("letters");
+  ul.replaceChildren(...letters.map(([h, t, v]) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="heb" lang="he">${h}</span><span>${t} = ${v}</span><span class="red">→ ${reduce(v)}</span>`;
+    return li;
+  }));
+  const total = letters.reduce((s, [, , v]) => s + v, 0);
+  document.getElementById("nameReadout").innerHTML =
+    `${letters.map(l => l[2]).join(" + ")} = <b>${total}</b> · chemin ${path.join(" → ")}`;
+}
+selectName("Iophiel");
+</script>
