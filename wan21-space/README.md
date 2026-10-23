@@ -32,6 +32,12 @@ installs WanGP at a pinned commit and drives it through its in‑process Python 
 | Wan2.1 Text2Video 14B | `t2v` | set `ENABLE_14B=1` | needs ≥ 40 GB RAM, L40S/A100 recommended |
 | Wan2.1 Image2Video 480p 14B | `i2v` | set `ENABLE_14B=1` | same as above |
 
+## Output modes
+
+- **Video**: MP4 at 16 fps.
+- **Image**: WanGP's Wan2.1 T2V has no native image output, so the demo renders a short
+  17-frame clip and returns its middle frame as a PNG.
+
 ## Hardware
 
 - Requires a GPU Space (Docker SDK). ZeroGPU is **not** supported: WanGP keeps the model

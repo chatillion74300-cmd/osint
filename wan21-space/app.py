@@ -26,6 +26,9 @@ if ENABLE_14B:
     MODELS["Wan2.1 Image2Video 480p 14B"] = "i2v"
 
 RESOLUTIONS = ["832x480", "480x832", "720x720", "672x384"]
+OUTPUT_KINDS = ["Video", "Image"]
+# Image mode renders a short clip and keeps its middle frame (Wan2.1 T2V has no native image output in WanGP).
+IMAGE_MODE_FRAMES = 17
 DEFAULT_NEGATIVE = (
     "blurry, low quality, distorted, deformed, watermark, text, static, overexposed"
 )
@@ -62,6 +65,21 @@ def get_session():
         return _session
 
 
+def _extract_frame(video_path):
+    import imageio.v2 as imageio
+
+    reader = imageio.get_reader(video_path)
+    try:
+        frames = [frame for frame in reader]
+    finally:
+        reader.close()
+    if not frames:
+        raise gr.Error("The generated clip has no frames.")
+    image_path = str(Path(video_path).with_suffix(".png"))
+    imageio.imwrite(image_path, frames[len(frames) // 2])
+    return image_path
+
+
 class _ProgressCallbacks:
     def __init__(self, progress):
         self.progress = progress
@@ -77,8 +95,8 @@ class _ProgressCallbacks:
         self.progress(self.ratio, desc=str(getattr(update, "status", "") or "Generating..."))
 
 
-def generate(model_label, prompt, image, negative_prompt, resolution, frames, steps,
-             guidance, seed, randomize_seed, progress=gr.Progress(track_tqdm=False)):
+def generate(output_kind, model_label, prompt, image, negative_prompt, resolution, frames,
+             steps, guidance, seed, randomize_seed, progress=gr.Progress(track_tqdm=False)):
     if not prompt or not prompt.strip():
         raise gr.Error("Please enter a prompt.")
     model_type = MODELS[model_label]
@@ -86,6 +104,9 @@ def generate(model_label, prompt, image, negative_prompt, resolution, frames, st
         raise gr.Error("Image2Video needs a start image.")
     if randomize_seed:
         seed = random.randint(0, 2**31 - 1)
+    image_mode = output_kind == "Image"
+    if image_mode:
+        frames = IMAGE_MODE_FRAMES
 
     progress(0, desc="Loading WanGP (first run downloads checkpoints, this can take a while)...")
     session = get_session()
@@ -110,11 +131,18 @@ def generate(model_label, prompt, image, negative_prompt, resolution, frames, st
     if not result.success or not result.generated_files:
         message = "; ".join(e.message for e in result.errors) or "Generation failed."
         raise gr.Error(message)
-    return result.generated_files[-1], int(seed)
+    output = result.generated_files[-1]
+    if image_mode:
+        return gr.update(value=None, visible=False), gr.update(value=_extract_frame(output), visible=True), int(seed)
+    return gr.update(value=output, visible=True), gr.update(value=None, visible=False), int(seed)
 
 
 def _toggle_image(model_label):
     return gr.update(visible=MODELS[model_label] == "i2v")
+
+
+def _toggle_output(output_kind):
+    return gr.update(visible=output_kind == "Video")
 
 
 with gr.Blocks(title="Wan2.1 Video Demo") as demo:
@@ -126,6 +154,7 @@ with gr.Blocks(title="Wan2.1 Video Demo") as demo:
     )
     with gr.Row():
         with gr.Column():
+            output_kind = gr.Radio(OUTPUT_KINDS, value="Video", label="Output")
             model = gr.Dropdown(list(MODELS), value=next(iter(MODELS)), label="Model")
             prompt = gr.Textbox(
                 label="Prompt", lines=3,
@@ -145,13 +174,16 @@ with gr.Blocks(title="Wan2.1 Video Demo") as demo:
             run = gr.Button("Generate", variant="primary")
         with gr.Column():
             video = gr.Video(label="Result", autoplay=True)
+            result_image = gr.Image(label="Result", type="filepath", format="png", visible=False)
             used_seed = gr.Number(label="Seed used", interactive=False)
 
     model.change(_toggle_image, model, image)
+    output_kind.change(_toggle_output, output_kind, frames)
     run.click(
         generate,
-        [model, prompt, image, negative, resolution, frames, steps, guidance, seed, randomize],
-        [video, used_seed],
+        [output_kind, model, prompt, image, negative, resolution, frames, steps, guidance, seed,
+         randomize],
+        [video, result_image, used_seed],
         concurrency_limit=1,
     )
 
